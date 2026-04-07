@@ -1,9 +1,9 @@
 # Skills for your AI REPL thingy
 
-* [github-actions-monitor](./git-changes-summary/) - Summarizes changes since a given date of commit. Relies on the `git log` + `git diff` commands instead of forcing the LLM figure it out each time.
+* [github-changes-summary](./git-changes-summary/) - Summarizes changes since a given date of commit. Relies on the `git log` + `git diff` commands instead of forcing the LLM figure it out each time.
 
   Example invocation:
-  - Show me the changes in this repo since yesterday"
+  - Show me the changes in this repo since yesterday
 
 * [github-actions-monitor](./github-actions-monitor/) - Uses the [gh](https://cli.github.com/) to query github actions jobs as well as debug any failed runs.
 
