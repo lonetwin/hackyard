@@ -83,14 +83,71 @@ def _build_url(base_url: str, path: str, line_ref: Optional[str] = None) -> str:
     return url
 
 
-def convert_footnotes(text: str, base_url: Optional[str] = None) -> str:
+def _extract_path_and_lines(
+    defn: str, base_url: Optional[str] = None
+) -> Optional[tuple[str, Optional[str]]]:
+    """Try to extract a file path and optional line reference from a
+    footnote definition string.  Returns ``(path, line_ref)`` or *None*
+    if the definition does not look like a file path.
+
+    Handles backtick-wrapped paths, absolute paths, and definitions that
+    contain descriptive text after the path (separated by `` -- `` or
+    em-dash).  When *base_url* is provided and the path is absolute, the
+    script finds the longest suffix of the path that shares a leading
+    component with the base URL's path, ensuring the generated URL is
+    correct regardless of the local checkout location.
+    """
+    # Strip leading descriptive noise: take the first backtick-wrapped
+    # token or the first whitespace-free token.
+    token_match = re.match(r"^`([^`]+)`", defn) or re.match(r"^(\S+)", defn)
+    if not token_match:
+        return None
+    token = token_match.group(1)
+
+    path_match = re.match(r"^(.+?)(?::(\d[\d,\-]*))?$", token)
+    if not path_match:
+        return None
+
+    path = path_match.group(1)
+    line_ref = path_match.group(2)
+
+    if path.startswith("/") and base_url:
+        # Find repo-relative portion by matching path components against
+        # the trailing segments of the base URL.
+        from urllib.parse import urlparse
+
+        url_path_parts = urlparse(base_url).path.strip("/").split("/")
+        path_parts = path.strip("/").split("/")
+        # Walk the absolute path looking for the first component that
+        # appears in the base URL path — everything from the component
+        # *after* that match onwards is repo-relative.
+        for i, part in enumerate(path_parts):
+            if part in url_path_parts:
+                # Take everything after the matching repo-name component
+                path = "/".join(path_parts[i + 1 :])
+                break
+        else:
+            path = path.lstrip("/")
+
+    # Reject tokens that don't look like file paths
+    if "/" not in path and "." not in path:
+        return None
+
+    return path, line_ref
+
+
+def convert_footnotes(
+    text: str,
+    base_url: Optional[str] = None,
+) -> str:
     """Replace footnote markers and definitions.
 
     Without base_url: markers become ``(Ref N)`` and definitions are
     collected into a Markdown reference table appended at the end.
 
     With base_url: definitions that look like file paths are turned into
-    full URLs and markers become inline hyperlinks.
+    full URLs and markers become inline hyperlinks with the text "ref".
+    Absolute paths are automatically made relative.
     """
     definitions: dict[int, str] = {}
     for m in re.finditer(r"^\[\^(\d+)\]:\s*(.+)$", text, re.MULTILINE):
@@ -101,39 +158,28 @@ def convert_footnotes(text: str, base_url: Optional[str] = None) -> str:
     if base_url and definitions:
         urls: dict[int, str] = {}
         for num, defn in definitions.items():
-            path_match = re.match(r"^`?([^`\s]+?)(?::(\d[\d,\-]*))?`?$", defn)
-            if path_match:
-                path = path_match.group(1)
-                line_ref = path_match.group(2)
+            extracted = _extract_path_and_lines(defn, base_url)
+            if extracted:
+                path, line_ref = extracted
                 urls[num] = _build_url(base_url, path, line_ref)
-            else:
-                urls[num] = defn
 
         def _replace_with_link(m: re.Match[str]) -> str:
             num = int(m.group(1))
             if num in urls:
-                url = urls[num]
-                defn = definitions.get(num, "")
-                path_match = re.match(r"^`?([^`\s]+?)(?::(\d[\d,\-]*))?`?$", defn)
-                if path_match:
-                    path = path_match.group(1)
-                    line_ref = path_match.group(2)
-                    filename = path.rsplit("/", 1)[-1]
-                    label = filename
-                    if line_ref:
-                        anchor = _line_ref_to_anchor(line_ref)
-                        label += anchor
-                    return f"([{label}]({url}))"
-                return f"([source]({url}))"
+                return f"([ref]({urls[num]}))"
             return f"(Ref {num})"
 
         text = re.sub(r"\[\^(\d+)\]", _replace_with_link, text)
+        # Ensure a space before every ([ref]...) that doesn't have one
+        text = re.sub(r"(?<! )\(\[ref\]", " ([ref]", text)
     elif definitions:
         text = re.sub(
             r"\[\^(\d+)\]",
             lambda m: f"(Ref {m.group(1)})",
             text,
         )
+        # Ensure a space before every (Ref N) that doesn't have one
+        text = re.sub(r"(?<! )\(Ref \d+\)", lambda m: " " + m.group(0), text)
         rows = ["", "## References", "", "| Ref | Location |", "|-----|----------|"]
         for num in sorted(definitions):
             rows.append(f"| {num} | {definitions[num]} |")
@@ -186,7 +232,10 @@ def remove_footnotes_toc_entry(text: str) -> str:
     return re.sub(r"^-?\s*\d*\.?\s*\[Footnotes\].*\n?", "", text, flags=re.MULTILINE)
 
 
-def convert(text: str, base_url: Optional[str] = None) -> str:
+def convert(
+    text: str,
+    base_url: Optional[str] = None,
+) -> str:
     text = replace_arrows(text)
     text = replace_em_dashes(text)
     text = remove_horizontal_rules(text)
@@ -197,6 +246,8 @@ def convert(text: str, base_url: Optional[str] = None) -> str:
     text = fix_toc_anchors(text)
     text = remove_backticks_around_links(text)
     text = strip_non_ascii(text)
+    # Collapse multiple spaces within lines (but not leading indentation)
+    text = re.sub(r"(?<=\S)  +", " ", text)
     # Collapse runs of 3+ blank lines down to 2
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text
