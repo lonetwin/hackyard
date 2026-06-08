@@ -28,6 +28,9 @@ Fetch all open PR review comments, categorize them by validity and effort, prese
    b. ASK: "Shall I proceed, or would you like a different approach?"
    c. On confirmation: act (implement and/or reply), then resolve thread
    d. Move to the next thread
+6. Finally, after all threads have been dealt with, if any code changes were
+   made, create a commit, present the commit description for approval, and if
+   approved, push the commit.
 ```
 
 ## Fetching Comments
@@ -109,3 +112,4 @@ Shall I proceed?
 | Dismissing valid concerns | If uncertain, lean toward implementing the fix |
 | Addressing all at once | One thread at a time — wait for user confirmation each time |
 | Skipping the categorization step | Always group and confirm first — user may disagree with your assessment |
+| Not committing after finishing | Always commit and push all code changes once all threads are resolved |
