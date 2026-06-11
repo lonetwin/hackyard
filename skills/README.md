@@ -18,6 +18,11 @@
   - What went wrong with run id 24090589644 ?
 
 * [session-journal](./session-journal) - a daily journal of your Github Copilot sessions. Stores these in the path specified by `$JOURNAL_DIR`  (defaults to `~/src/journal` -- update this default directly in the `SKILL.mc` file)
+  > [!TIP]
+  > 
+  > The file [viewer.html](./session-journal/viewer.html) has a simple
+  > self-contained viewer for the entires. Use `python -m http.server` in
+  > `$JOURNAL_DIR` to view these at localhost:8000
 
   Example invocations:
   - journal today's sessions
@@ -25,7 +30,3 @@
   - summarize my sessions from [date]
   - create a journal entry for [timeframe]
   - journal the last N days
-
-  > [!NOTE] The file [viewer.html](./session-journal/viewer.html) has a simple
-  > self-contained viewer for the entires. Use `python -m http.server` in
-  > `$JOURNAL_DIR` to view these at localhost:8000
